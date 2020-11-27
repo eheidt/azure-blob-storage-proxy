@@ -2,6 +2,7 @@ package http_cache
 
 import (
 	"bufio"
+        "bytes"
 	"context"
 	"fmt"
 	"github.com/Azure/azure-storage-blob-go/azblob"
@@ -90,14 +91,22 @@ func (proxy StorageProxy) checkBlobExists(w http.ResponseWriter, name string) {
 func (proxy StorageProxy) uploadBlob(w http.ResponseWriter, r *http.Request, name string) {
 	blockBlobURL := proxy.containerURL.NewBlockBlobURL(proxy.objectName(name))
 
-	_, err := azblob.UploadStreamToBlockBlob(
+        buf := new(bytes.Buffer)
+	buf.ReadFrom(r.Body)
+
+	resp, err := azblob.UploadStreamToBlockBlob(
 		context.Background(),
-		bufio.NewReader(r.Body),
+		bytes.NewReader(buf.Bytes()),
 		blockBlobURL,
 		azblob.UploadStreamToBlockBlobOptions{},
 	)
+
+        fmt.Println(name, resp.Response().StatusCode, buf.Len())
+
 	if err != nil {
-		log.Fatal(err)
+		log.Println(err)
+	        w.WriteHeader(http.StatusInternalServerError)
+	} else {
+		w.WriteHeader(resp.Response().StatusCode)
 	}
-	w.WriteHeader(http.StatusCreated)
 }
